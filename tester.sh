@@ -7,7 +7,7 @@ check_sudo_logging() {
     before=$(tail -1 "$file" 2>/dev/null)
     sudo echo "test message 2" > /dev/null 2>&1
     after=$(tail -1 "$file" 2>/dev/null)
-    printf "%-32s\t" "log in $file:"
+    printf "%-32s  " "log in $file:"
     if [ "$before" != "$after" ] && echo "$after" | grep -q "test message"; then
         echo -e "\e[32mOK!\e[0m"
     else
@@ -32,7 +32,7 @@ echo -n "No graphics:                    "; check_string absent $(rpm -qa | grep
 echo -n "OS is Rocky Linux:              "; check_string is $(grep -F 'NAME="Rocky Linux"' /etc/os-release)
 
 lsblk
-[ -n "$LUKS" ] && cryptsetup status "$LUKS"
+#[ -n "$LUKS" ] && cryptsetup status $LUKS
 
 # -- SYSTEM --
 echo -e "\n=== SERVICES ==="
