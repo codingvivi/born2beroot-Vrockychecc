@@ -9,7 +9,7 @@ check_sudo_logging() {
     before=$(tail -1 "$file" 2>/dev/null)
     sudo echo "test message 2" > /dev/null 2>&1
     after=$(tail -1 "$file" 2>/dev/null)
-    echo -n "sudo log in $file:  "
+    printf "%-32s" "sudo log in $file:"
     if [ "$before" != "$after" ] && echo "$after" | grep -q "test message"; then
         echo -e "\e[32mOK!\e[0m"
     else
@@ -56,10 +56,12 @@ echo -n "PermitRootLogin no:             "; check_string is $(cat /etc/ssh/sshd_
 
 # -- PASSWORD AGING --
 echo -e "\n=== PASSWORD AGING ==="
+echo -e "\n--- current users (chage) ---"
 echo -n "chage min days=2:               "; check_string is $(chage -l $LOGIN | grep -i "minimum" | grep 2)
 echo -n "chage max days=30:              "; check_string is $(chage -l $LOGIN | grep -i "maximum" | grep 30)
 echo -n "chage warn days=7:              "; check_string is $(chage -l $LOGIN | grep -i "expires" | grep 7)
 
+echo -e "\n--- future users (login.defs) ---"
 echo -n "login.defs PASS_MAX_DAYS=30:    "; check_string is $(grep -E "^[[:space:]]*PASS_MAX_DAYS[[:space:]]+30" /etc/login.defs)
 echo -n "login.defs PASS_MIN_DAYS=2:     "; check_string is $(grep -E "^[[:space:]]*PASS_MIN_DAYS[[:space:]]+2" /etc/login.defs)
 echo -n "login.defs PASS_WARN_AGE=7:     "; check_string is $(grep -E "^[[:space:]]*PASS_WARN_AGE[[:space:]]+7" /etc/login.defs)
