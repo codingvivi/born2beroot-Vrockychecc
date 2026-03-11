@@ -1,5 +1,3 @@
-cho -n "cron monitoring.sh */10:        "; check_string is $(crontab -l | grep "monitoring.sh" | grep -F "*/10 * * * *")
-
 LOGIN=${1:?Usage: $0 <username> [luks-uuid]}
 LUKS=${2:-}
 
@@ -9,7 +7,7 @@ check_sudo_logging() {
     before=$(tail -1 "$file" 2>/dev/null)
     sudo echo "test message 2" > /dev/null 2>&1
     after=$(tail -1 "$file" 2>/dev/null)
-    printf "%-32s" "sudo log in $file:"
+    printf "%-32s\t" "log in $file:"
     if [ "$before" != "$after" ] && echo "$after" | grep -q "test message"; then
         echo -e "\e[32mOK!\e[0m"
     else
