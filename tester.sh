@@ -6,11 +6,11 @@ OVERRIDE=
 
 while [[ "$1" == -* ]]; do
   case "$1" in
-    --login)      LOGIN="$2";          shift 2 ;;
-    --sudo-log)   SUDO_LOG="$2";       shift 2 ;;
-    --luks)       LUKS="$2";           shift 2 ;;
-    --pwquality)  PWQUALITY_CONF="$2"; shift 2 ;;
-    -o|--override) OVERRIDE="$2";      shift 2 ;;
+    --login)       LOGIN="$2";          shift 2 ;;
+    --sudo-log)    SUDO_LOG="$2";       shift 2 ;;
+    --luks)        LUKS="$2";           shift 2 ;;
+    --pwquality)   PWQUALITY_CONF="$2"; shift 2 ;;
+    -o|--override) OVERRIDE="$2";       shift 2 ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
@@ -41,7 +41,7 @@ check_sudo_logging() {
   fi
 }
 
-check_string() {
+print_result() {
   local fail_msg="$ERROR"
   local override=0
   while [[ "$1" == -* ]]; do
@@ -54,86 +54,78 @@ check_string() {
     esac
   done
   [ "$override" = 1 ] && { echo -e "$OK"; return; }
-  local mode=$1
-  local result=$2
-  if [ "$mode" = "is" ]; then
-    [ -n "$result" ] && echo -e "$OK" || echo -e "$fail_msg"
-  elif [ "$mode" = "absent" ]; then
-    [ -z "$result" ] && echo -e "$OK" || echo -e "$fail_msg"
-  fi
+  "$@" && echo -e "$OK" || echo -e "$fail_msg"
 }
 
 # -- SYSTEM INFO --
 echo -e "\n=== SYSTEM INFO ==="
-print_label "No graphics:";                check_string absent $(rpm -qa | grep -iE "xorg|wayland")
-print_label "OS is Rocky Linux:";          check_string is $(grep -F 'NAME="Rocky Linux"' /etc/os-release)
+print_label "No graphics:";                  print_result [ -z "$(rpm -qa | grep -iE 'xorg|wayland')" ]
+print_label "OS is Rocky Linux:";            print_result [ -n "$(grep -F 'NAME="Rocky Linux"' /etc/os-release)" ]
 
 lsblk
 #[ -n "$LUKS" ] && cryptsetup status $LUKS
 
-# -- SYSTEM --
+# -- SERVICES --
 echo -e "\n=== SERVICES ==="
-print_label "SELinux enforcing (config):"; check_string -s warn is $(cat /etc/selinux/config | grep -E "SELINUX=enforcing")
-print_label "SELinux enabled: (running)";  check_string is $(sestatus | grep -i "SELinux status" | grep -i "enabled")
-print_label "Firewall running:";           check_string is $(firewall-cmd --state)
+print_label "SELinux enforcing (config):";   print_result -s warn [ -n "$(cat /etc/selinux/config | grep -E 'SELINUX=enforcing')" ]
+print_label "SELinux enabled (running):";    print_result [ -n "$(sestatus | grep -i 'SELinux status' | grep -i 'enabled')" ]
+print_label "Firewall running:";             print_result [ -n "$(firewall-cmd --state)" ]
 aureport -a
 
 # -- SSH / NETWORK --
 echo -e "\n=== SSH / NETWORK ==="
-print_label "Hostname correct:";           check_string is $(hostname | grep ${LOGIN}42)
-print_label "Hosts entry:";               check_string is $(cat /etc/hosts | grep ${LOGIN}42)
-
-print_label "Port other than 4242 not open:"; check_string absent $(firewall-cmd --list-ports | grep -v 4242)
-print_label "Port 4242 open:";            check_string is $(firewall-cmd --query-port=4242/tcp)
-print_label "Port 4242 listening:";       check_string is $(ss -tlnp | grep 4242)
-print_label "SELinux label for 4242:";    check_string is $(semanage port -l | grep ssh_port_t | grep 4242)
-print_label "PermitRootLogin no:";        check_string is $(sshd -T | grep -i "^permitrootlogin no")
+print_label "Hostname correct:";             print_result [ -n "$(hostname | grep ${LOGIN}42)" ]
+print_label "Hosts entry:";                  print_result [ -n "$(cat /etc/hosts | grep ${LOGIN}42)" ]
+print_label "No port other than 4242 open:"; print_result [ -z "$(firewall-cmd --list-ports | grep -v 4242)" ]
+print_label "Port 4242 open:";               print_result [ -n "$(firewall-cmd --query-port=4242/tcp)" ]
+print_label "Port 4242 listening:";          print_result [ -n "$(ss -tlnp | grep 4242)" ]
+print_label "SELinux label for 4242:";       print_result [ -n "$(semanage port -l | grep ssh_port_t | grep 4242)" ]
+print_label "PermitRootLogin no:";           print_result [ -n "$(sshd -T | grep -i '^permitrootlogin no')" ]
 
 # -- USERS & GROUPS --
 echo -e "\n=== USERS & GROUPS ==="
-print_label "User $LOGIN exists:";         check_string is $(id)
-print_label "User $LOGIN in wheel group:";  check_string is $(groups $LOGIN | grep wheel)
-print_label "User $LOGIN in user42 group:"; check_string is $(groups $LOGIN | grep user42)
-print_label "Group wheel exists:";         check_string is $(getent group wheel)
-print_label "Group user42 exists:";       check_string is $(getent group user42)
+print_label "User $LOGIN exists:";           print_result $(id $LOGIN)
+print_label "User $LOGIN in wheel group:";   print_result [ -n "$(groups $LOGIN | grep wheel)" ]
+print_label "User $LOGIN in user42 group:";  print_result [ -n "$(groups $LOGIN | grep user42)" ]
+print_label "Group wheel exists:";           print_result [ -n "$(getent group wheel)" ]
+print_label "Group user42 exists:";          print_result [ -n "$(getent group user42)" ]
 
 # -- PASSWORD AGING --
 echo -e "\n=== PASSWORD AGING ==="
 echo -e "\n--- current users (chage) ---"
-print_label "chage min days=2:";          check_string is $(chage -l $LOGIN | grep -i "minimum" | grep 2)
-print_label "chage max days=30:";         check_string is $(chage -l $LOGIN | grep -i "maximum" | grep 30)
-print_label "chage warn days=7:";         check_string is $(chage -l $LOGIN | grep -i "expires" | grep 7)
+print_label "chage min days=2:";             print_result [ -n "$(chage -l $LOGIN | grep -i 'minimum' | grep 2)" ]
+print_label "chage max days=30:";            print_result [ -n "$(chage -l $LOGIN | grep -i 'maximum' | grep 30)" ]
+print_label "chage warn days=7:";            print_result [ -n "$(chage -l $LOGIN | grep -i 'expires' | grep 7)" ]
 
 echo -e "\n--- future users (login.defs) ---"
-print_label "login.defs PASS_MAX_DAYS=30:"; check_string is $(grep -E "^[[:space:]]*PASS_MAX_DAYS[[:space:]]+30" /etc/login.defs)
-print_label "login.defs PASS_MIN_DAYS=2:";  check_string is $(grep -E "^[[:space:]]*PASS_MIN_DAYS[[:space:]]+2" /etc/login.defs)
-print_label "login.defs PASS_WARN_AGE=7:";  check_string is $(grep -E "^[[:space:]]*PASS_WARN_AGE[[:space:]]+7" /etc/login.defs)
+print_label "login.defs PASS_MAX_DAYS=30:";  print_result [ -n "$(grep -E '^[[:space:]]*PASS_MAX_DAYS[[:space:]]+30' /etc/login.defs)" ]
+print_label "login.defs PASS_MIN_DAYS=2:";   print_result [ -n "$(grep -E '^[[:space:]]*PASS_MIN_DAYS[[:space:]]+2' /etc/login.defs)" ]
+print_label "login.defs PASS_WARN_AGE=7:";   print_result [ -n "$(grep -E '^[[:space:]]*PASS_WARN_AGE[[:space:]]+7' /etc/login.defs)" ]
 
 # -- PASSWORD QUALITY --
 echo -e "\n=== PASSWORD QUALITY ==="
-print_label "pwquality minlen=10:";       check_string is $(echo "Aa1\!bcd" | pwscore 2>&1 | grep -i "shorter")
-print_label "pwquality ucredit:";         check_string is $(echo "aa1\!bcdefgh" | pwscore 2>&1 | grep -i "upper")
-print_label "pwquality lcredit:";         check_string is $(echo "AA1\!BCDEFGH" | pwscore 2>&1 | grep -i "lower")
-print_label "pwquality dcredit:";         check_string is $(echo "Aa\!bcdefghij" | pwscore 2>&1 | grep -i "digit")
-print_label "pwquality maxrepeat=3:";     check_string is $(echo "Aa1\!bccccde" | pwscore 2>&1 | grep -i "same")
-print_label "pwquality usercheck:";       check_string is $(echo "Aa1\!${LOGIN}xyz" | pwscore $LOGIN 2>&1 | grep -i "user")
+print_label "pwquality minlen=10:";          print_result [ -n "$(echo 'Aa1\!bcd' | pwscore 2>&1 | grep -i 'shorter')" ]
+print_label "pwquality ucredit:";            print_result [ -n "$(echo 'aa1\!bcdefgh' | pwscore 2>&1 | grep -i 'upper')" ]
+print_label "pwquality lcredit:";            print_result [ -n "$(echo 'AA1\!BCDEFGH' | pwscore 2>&1 | grep -i 'lower')" ]
+print_label "pwquality dcredit:";            print_result [ -n "$(echo 'Aa\!bcdefghij' | pwscore 2>&1 | grep -i 'digit')" ]
+print_label "pwquality maxrepeat=3:";        print_result [ -n "$(echo 'Aa1\!bccccde' | pwscore 2>&1 | grep -i 'same')" ]
+print_label "pwquality usercheck:";          print_result [ -n "$(echo "Aa1\!${LOGIN}xyz" | pwscore $LOGIN 2>&1 | grep -i 'user')" ]
 # These cant be checked by pwscore
-print_label "pwquality difok=7:";         check_string $(override pwquality) -s warn is $(cat $PWQUALITY_CONF | grep -E "^[[:space:]]*difok[[:space:]]*=[[:space:]]*7")
-print_label "pwquality enforce_for_root:"; check_string $(override pwquality) -s warn is $(cat $PWQUALITY_CONF | grep -E "^[[:space:]]*enforce_for_root")
-
+print_label "pwquality difok=7:";            print_result $(override pwquality) -s warn [ -n "$(cat $PWQUALITY_CONF | grep -E '^[[:space:]]*difok[[:space:]]*=[[:space:]]*7')" ]
+print_label "pwquality enforce_for_root:";   print_result $(override pwquality) -s warn [ -n "$(cat $PWQUALITY_CONF | grep -E '^[[:space:]]*enforce_for_root')" ]
 
 # -- SUDO --
 echo -e "\n=== SUDO ==="
-print_label "sudo secure_path:";          check_string is $(sudo -V | grep -i "override" | grep "\$PATH")
-print_label "sudo passwd_tries=3:";       check_string is $(sudo -V | grep -i "Number of tries" | grep 3)
-print_label "sudo badpass_message:";      check_string is $(sudo -V | grep -v "Sorry, try again." | grep -i "Incorrect password message")
-print_label "sudo requiretty:";           check_string is $(sudo -V | grep -i "Only" | grep -i "allow" | grep -i "tty")
-print_label "sudo log dir setting:";      check_string is $(sudo -V | grep -i "log file" | grep "/var/log/sudo/")
-print_label "sudo log exists:";           check_string is $(find /var/log -maxdepth 2 -type f | grep "sudo/")
-print_label "sudo log path valid:";       check_string is $([[ "$SUDO_LOG" == /var/log/sudo/* ]] && echo yes)
+print_label "sudo secure_path:";             print_result [ -n "$(sudo -V | grep -i 'override' | grep '\$PATH')" ]
+print_label "sudo passwd_tries=3:";          print_result [ -n "$(sudo -V | grep -i 'Number of tries' | grep 3)" ]
+print_label "sudo badpass_message:";         print_result [ -n "$(sudo -V | grep -v 'Sorry, try again.' | grep -i 'Incorrect password message')" ]
+print_label "sudo requiretty:";              print_result [ -n "$(sudo -V | grep -i 'Only' | grep -i 'allow' | grep -i 'tty')" ]
+print_label "sudo log dir setting:";         print_result [ -n "$(sudo -V | grep -i 'log file' | grep '/var/log/sudo/')" ]
+print_label "sudo log exists:";              print_result [ -n "$(find /var/log -maxdepth 2 -type f | grep 'sudo/')" ]
+print_label "sudo log path valid:";          print_result [ -n "$(echo "$SUDO_LOG" | grep '^/var/log/sudo/')" ]
 echo -e "\n--- checking sudo log is written to ---"
-[ -n "$SUDO_LOG" ] && check_sudo_logging "$SUDO_LOG" || echo "(skipped — pass sudo log path as arg 2 to enable)"
+[ -n "$SUDO_LOG" ] && check_sudo_logging "$SUDO_LOG" || echo "(skipped — pass --sudo-log to enable)"
 
 # -- CRON --
 echo -e "\n=== CRON ==="
-print_label "cron monitoring.sh */10:";   check_string -s warn is $(crontab -l | grep "monitoring.sh" | grep -F "*/10 * * * *")
+print_label "cron monitoring.sh */10:";      print_result -s warn [ -n "$(crontab -l | grep 'monitoring.sh' | grep -F '*/10 * * * *')" ]
