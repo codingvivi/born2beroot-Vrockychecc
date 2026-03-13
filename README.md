@@ -11,10 +11,18 @@ this tester should too!
 ## Usage
 
 ```bash
-sudo ./tester.sh <username>
+sudo ./tester.sh --login <username> [--sudo-log <path>] [--pwquality <path>] [--luks <uuid>] [--override <string>]
 ```
 
-Must be run as root or with sudo. The username should be your 42 login.
+Must be run as root or with sudo.
+
+| Flag | Description |
+|---|---|
+| `--login` | Your 42 login (required) |
+| `--sudo-log` | Path to the sudo log file to test writing |
+| `--pwquality` | Path to a pwquality config file |
+| `--luks` | LUKS partition UUID |
+| `--override` | Pass a string to force matching checks to `OK!` (only used for `pwquality` rn, if you know what you're doing and have some multi file setup) |
 
 ## What it checks
 
@@ -32,8 +40,8 @@ Must be run as root or with sudo. The username should be your 42 login.
 ### What it DOES NOT check
 
 - correctness of your monitoring.sh script's contents
-- Your disk layout
-- Your encryption (used to but disabled it)
+- disk layout
+- encryption functioning (used to but disabled it)
 
 ## Output
 

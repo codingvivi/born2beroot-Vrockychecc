@@ -1,5 +1,23 @@
-LOGIN=${1:?Usage: $0 <username> [luks-uuid]}
-LUKS=${2:-}
+LOGIN=
+SUDO_LOG=
+LUKS=
+PWQUALITY_CONF=/etc/security/pwquality.conf
+OVERRIDE=
+
+while [[ "$1" == -* ]]; do
+  case "$1" in
+    --login)      LOGIN="$2";          shift 2 ;;
+    --sudo-log)   SUDO_LOG="$2";       shift 2 ;;
+    --luks)       LUKS="$2";           shift 2 ;;
+    --pwquality)  PWQUALITY_CONF="$2"; shift 2 ;;
+    -o|--override) OVERRIDE="$2";      shift 2 ;;
+    *) echo "Unknown flag: $1"; exit 1 ;;
+  esac
+done
+
+override() { [[ "$OVERRIDE" == *"$1"* ]] && echo "-o"; }
+
+[ -z "$LOGIN" ] && { echo "Usage: $0 --login <username> [--sudo-log <path>] [--luks <uuid>] [--pwquality <path>]"; exit 1; }
 
 mkdir -p /var/log/shallowthought
 exec 2>/var/log/shallowthought/errors_$(date +%Y-%m-%d-%H-%M-%S).log
@@ -11,30 +29,31 @@ ERROR="\e[31mERROR...\e[0m"
 print_label() { printf "%-34s  " "$1"; }
 
 check_sudo_logging() {
-  sudo echo "test message 1" > /dev/null 2>&1
-  while IFS= read -r file; do
-    before=$(tail -1 "$file" 2>/dev/null)
-    sudo echo "test message 2" > /dev/null 2>&1
-    after=$(tail -1 "$file" 2>/dev/null)
-    print_label "log in $file:"
-    if [ "$before" != "$after" ] && echo "$after" | grep -q "test message"; then
-        echo -e "$OK"
-    else
-        echo -e "$ERROR"
-    fi
-  done < <(find /var/log -maxdepth 2 -type f | grep "sudo/")
+  local file=$1
+  before=$(tail -1 "$file" 2>/dev/null)
+  sudo echo "test message" > /dev/null 2>&1
+  after=$(tail -1 "$file" 2>/dev/null)
+  print_label "log in $file:"
+  if [ "$before" != "$after" ] && echo "$after" | grep -q "test message"; then
+    echo -e "$OK"
+  else
+    echo -e "$ERROR"
+  fi
 }
 
 check_string() {
   local fail_msg="$ERROR"
+  local override=0
   while [[ "$1" == -* ]]; do
     case "$1" in
       -s|--severity) case "$2" in
           warn) fail_msg="$WARN" ;;
           error) fail_msg="$ERROR" ;;
         esac; shift 2 ;;
+      -o) override=1; shift ;;
     esac
   done
+  [ "$override" = 1 ] && { echo -e "$OK"; return; }
   local mode=$1
   local result=$2
   if [ "$mode" = "is" ]; then
@@ -99,8 +118,8 @@ print_label "pwquality dcredit:";         check_string is $(echo "Aa\!bcdefghij"
 print_label "pwquality maxrepeat=3:";     check_string is $(echo "Aa1\!bccccde" | pwscore 2>&1 | grep -i "same")
 print_label "pwquality usercheck:";       check_string is $(echo "Aa1\!${LOGIN}xyz" | pwscore $LOGIN 2>&1 | grep -i "user")
 # These cant be checked by pwscore
-print_label "pwquality difok=7:";         check_string -s warn is $(grep -E "^[[:space:]]*difok[[:space:]]*=[[:space:]]*7" /etc/security/pwquality.conf)
-print_label "pwquality enforce_for_root:"; check_string -s warn is $(grep -E "^[[:space:]]*enforce_for_root" /etc/security/pwquality.conf)
+print_label "pwquality difok=7:";         check_string $(override pwquality) -s warn is $(cat $PWQUALITY_CONF | grep -E "^[[:space:]]*difok[[:space:]]*=[[:space:]]*7")
+print_label "pwquality enforce_for_root:"; check_string $(override pwquality) -s warn is $(cat $PWQUALITY_CONF | grep -E "^[[:space:]]*enforce_for_root")
 
 
 # -- SUDO --
@@ -111,8 +130,9 @@ print_label "sudo badpass_message:";      check_string is $(sudo -V | grep -v "S
 print_label "sudo requiretty:";           check_string is $(sudo -V | grep -i "Only" | grep -i "allow" | grep -i "tty")
 print_label "sudo log dir setting:";      check_string is $(sudo -V | grep -i "log file" | grep "/var/log/sudo/")
 print_label "sudo log exists:";           check_string is $(find /var/log -maxdepth 2 -type f | grep "sudo/")
+print_label "sudo log path valid:";       check_string is $([[ "$SUDO_LOG" == /var/log/sudo/* ]] && echo yes)
 echo -e "\n--- checking sudo log is written to ---"
-check_sudo_logging
+[ -n "$SUDO_LOG" ] && check_sudo_logging "$SUDO_LOG" || echo "(skipped — pass sudo log path as arg 2 to enable)"
 
 # -- CRON --
 echo -e "\n=== CRON ==="
