@@ -1,6 +1,9 @@
 LOGIN=${1:?Usage: $0 <username> [luks-uuid]}
 LUKS=${2:-}
 
+mkdir -p /var/log/shallowthought
+exec 2>/var/log/shallowthought/errors_$(date +%Y-%m-%d-%H-%M-%S).log
+
 OK="\e[32mOK!\e[0m"
 WARN="\e[38;5;208mWARN...\e[0m"
 ERROR="\e[31mERROR...\e[0m"
@@ -66,6 +69,14 @@ print_label "Port 4242 open:";            check_string is $(firewall-cmd --query
 print_label "Port 4242 listening:";       check_string is $(ss -tlnp | grep 4242)
 print_label "SELinux label for 4242:";    check_string is $(semanage port -l | grep ssh_port_t | grep 4242)
 print_label "PermitRootLogin no:";        check_string is $(sshd -T | grep -i "^permitrootlogin no")
+
+# -- USERS & GROUPS --
+echo -e "\n=== USERS & GROUPS ==="
+print_label "User $LOGIN exists:";         check_string is $(id)
+print_label "User $LOGIN in wheel group:";  check_string is $(groups $LOGIN | grep wheel)
+print_label "User $LOGIN in user42 group:"; check_string is $(groups $LOGIN | grep user42)
+print_label "Group wheel exists:";         check_string is $(getent group wheel)
+print_label "Group user42 exists:";       check_string is $(getent group user42)
 
 # -- PASSWORD AGING --
 echo -e "\n=== PASSWORD AGING ==="
