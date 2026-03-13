@@ -2,22 +2,24 @@ LOGIN=
 SUDO_LOG=
 LUKS=
 PWQUALITY_CONF=/etc/security/pwquality.conf
+CRON_FILE=
 OVERRIDE=
 
 while [[ "$1" == -* ]]; do
   case "$1" in
-    --login)       LOGIN="$2";          shift 2 ;;
-    --sudo-log)    SUDO_LOG="$2";       shift 2 ;;
-    --luks)        LUKS="$2";           shift 2 ;;
-    --pwquality)   PWQUALITY_CONF="$2"; shift 2 ;;
-    -o|--override) OVERRIDE="$2";       shift 2 ;;
+    -l|--login)     LOGIN="$2";          shift 2 ;;
+    -s|--sudo-log)  SUDO_LOG="$2";       shift 2 ;;
+    -k|--luks)      LUKS="$2";           shift 2 ;;
+    -p|--pwquality) PWQUALITY_CONF="$2"; shift 2 ;;
+    -c|--cronfile)  CRON_FILE="$2";      shift 2 ;;
+    -o|--override)  OVERRIDE="$2";       shift 2 ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
 
 override() { [[ "$OVERRIDE" == *"$1"* ]] && echo "-o"; }
 
-[ -z "$LOGIN" ] && { echo "Usage: $0 --login <username> [--sudo-log <path>] [--luks <uuid>] [--pwquality <path>]"; exit 1; }
+[ -z "$LOGIN" ] && { echo "Usage: $0 -l|--login <username> [-s|--sudo-log <path>] [-k|--luks <uuid>] [-p|--pwquality <path>] [-c|--cronfile <path>] [-o|--override <string>]"; exit 1; }
 
 mkdir -p /var/log/shallowthought
 exec 2>/var/log/shallowthought/errors_$(date +%Y-%m-%d-%H-%M-%S).log
@@ -84,7 +86,7 @@ print_label "PermitRootLogin no:";           print_result [ -n "$(sshd -T | grep
 
 # -- USERS & GROUPS --
 echo -e "\n=== USERS & GROUPS ==="
-print_label "User $LOGIN exists:";           print_result $(id $LOGIN)
+print_label "User $LOGIN exists:";           print_result [ -n "$(id $LOGIN)" ]  
 print_label "User $LOGIN in wheel group:";   print_result [ -n "$(groups $LOGIN | grep wheel)" ]
 print_label "User $LOGIN in user42 group:";  print_result [ -n "$(groups $LOGIN | grep user42)" ]
 print_label "Group wheel exists:";           print_result [ -n "$(getent group wheel)" ]
@@ -127,5 +129,10 @@ echo -e "\n--- checking sudo log is written to ---"
 [ -n "$SUDO_LOG" ] && check_sudo_logging "$SUDO_LOG" || echo "(skipped — pass --sudo-log to enable)"
 
 # -- CRON --
+CRON_SCRIPT=$(awk '!/^#/ && NF {print $NF}' "$CRON_FILE" 2>/dev/null)
+
 echo -e "\n=== CRON ==="
-print_label "cron monitoring.sh */10:";      print_result -s warn [ -n "$(crontab -l | grep 'monitoring.sh' | grep -F '*/10 * * * *')" ]
+print_label "cron monitoring.sh */10:";      print_result [ -n "$(cat $CRON_FILE | grep 'monitoring.sh' | grep -E '^\*/10[[:space:]]+\*[[:space:]]+\*[[:space:]]+\*[[:space:]]+\*')" ]
+print_label "cron script exists:";           print_result [ -f "$CRON_SCRIPT" ]
+print_label "cron script is monitoring.sh:"; print_result [ "$(basename $CRON_SCRIPT)" = "monitoring.sh" ]
+print_label "cron syntax valid:";            print_result [ -n "$(crontab -T $CRON_FILE 2>&1 | grep -i 'No syntax')" ]

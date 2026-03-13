@@ -11,18 +11,19 @@ this tester should too!
 ## Usage
 
 ```bash
-sudo ./tester.sh --login <username> [--sudo-log <path>] [--pwquality <path>] [--luks <uuid>] [--override <string>]
+sudo ./tester.sh -l|--login <username> [-s|--sudo-log <path>] [-p|--pwquality <path>] [-k|--luks <uuid>] [-c|--cronfile <path>] [-o|--override <string>]
 ```
 
 Must be run as root or with sudo.
 
 | Flag | Description |
 |---|---|
-| `--login` | Your 42 login (required) |
-| `--sudo-log` | Path to the sudo log file to test writing |
-| `--pwquality` | Path to a pwquality config file |
-| `--luks` | LUKS partition UUID |
-| `--override` | Pass a string to force matching checks to `OK!` (only used for `pwquality` rn, if you know what you're doing and have some multi file setup) |
+| `-l`, `--login` | Your 42 login (required) |
+| `-s`, `--sudo-log` | Path to the sudo log file to test writing |
+| `-p`, `--pwquality` | Path to a pwquality config file |
+| `-k`, `--luks` | LUKS partition UUID |
+| `-c`, `--cronfile` | Path to the cron file to check |
+| `-o`, `--override` | Pass a string to force matching checks to `OK!` (only used for `pwquality` rn, if you know what you're doing and have some multi file setup) |
 
 ## What it checks
 
@@ -35,7 +36,7 @@ Must be run as root or with sudo.
 | Password Aging | `chage` settings for the user, `login.defs` defaults |
 | Password Quality | `pwquality` rules via `pwscore` (length, uppercase, lowercase, digit, repeat, usercheck, difok, enforce_for_root) |
 | Sudo | secure_path, passwd_tries, badpass_message, requiretty, log directory, log is written to |
-| Cron | `monitoring.sh` runs every 10 minutes |
+| Cron | `monitoring.sh` runs every 10 minutes, script exists at path in cronfile, script is named `monitoring.sh`, cron syntax valid |
 
 ### What it DOES NOT check
 
